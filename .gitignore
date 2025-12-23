@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.env
+.venv
+venv/
+*.egg-info/
+
+# Logs and temp files
+logs/
+*.log
+pids/
+*.pid
+
+# Results (large files)
+results/uploads/
+results/outputs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+untitled.txt
+src/main.
+.ipynb_checkpoints/
