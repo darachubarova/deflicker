@@ -6,7 +6,7 @@ A complete system for reducing flickering in frame-by-frame video segmentation u
 
 ## 🌐 Project Presentation
 
-**Live Demo:** [https://github.com/darachubarova/defliker](https://https://github.com/darachubarova/defliker/)
+**Live Demo:** [https://github.com/darachubarova/defliker](https://https://github.com/darachubarova/deflicker/)
 
 A comprehensive presentation website (in Russian) showcasing:
 - Problem statement and visual explanations
