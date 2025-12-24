@@ -360,6 +360,27 @@
             opacity: 0.8;
         }
 
+        .download-section {
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .download-section .form-group {
+            margin-bottom: 15px;
+        }
+
+        .download-section input[type="number"] {
+            border: 2px solid #e2e8f0;
+            transition: border-color 0.3s ease;
+        }
+
+        .download-section input[type="number"]:focus {
+            outline: none;
+            border-color: #3182ce;
+        }
+
         .hidden {
             display: none;
         }
@@ -519,6 +540,21 @@
                     <div class="label">Percentage</div>
                 </div>
             </div>
+
+            <h2 style="margin-top: 30px;">📥 Download Comparison Video</h2>
+            <p style="color: #4a5568; margin-bottom: 20px;">Download a video with three layers: Original (top), Masks Before Stabilization (middle), Masks After Stabilization (bottom)</p>
+            
+            <div class="download-section" id="downloadSection">
+                <div class="form-group">
+                    <label for="frameNumber">Frame Number (optional)</label>
+                    <input type="number" id="frameNumber" min="0" placeholder="Enter frame number to sync comparison" style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 1rem;">
+                    <p style="color: #718096; font-size: 0.9rem; margin-top: 5px;">Leave empty to download from frame 0</p>
+                </div>
+
+                <button class="btn btn-primary" id="downloadVideoBtn">
+                    ⬇️ Download Video
+                </button>
+            </div>
         </div>
     </div>
 
@@ -555,6 +591,8 @@
         const prevFrameBtn = document.getElementById('prevFrameBtn');
         const nextFrameBtn = document.getElementById('nextFrameBtn');
         const frameCounter = document.getElementById('frameCounter');
+        const downloadVideoBtn = document.getElementById('downloadVideoBtn');
+        const frameNumber = document.getElementById('frameNumber');
 
         // Upload Zone Handlers
         uploadZone.addEventListener('click', () => fileInput.click());
@@ -654,6 +692,45 @@
             if (state.currentFrame < state.totalFrames - 1) {
                 state.currentFrame++;
                 updateFrameDisplay();
+            }
+        });
+
+        // Download Video Button Handler
+        downloadVideoBtn.addEventListener('click', async () => {
+            if (!state.jobId) {
+                alert('Please complete stabilization first');
+                return;
+            }
+            
+            try {
+                // Get frame number value
+                let frameNum = null;
+                
+                if (frameNumber.value) {
+                    frameNum = parseInt(frameNumber.value);
+                    if (isNaN(frameNum) || frameNum < 0) {
+                        alert('Invalid frame number');
+                        return;
+                    }
+                    if (frameNum >= state.totalFrames) {
+                        alert(`Frame number must be less than ${state.totalFrames}`);
+                        return;
+                    }
+                }
+                
+                downloadVideoBtn.disabled = true;
+                downloadVideoBtn.textContent = '⏳ Generating video...';
+                
+                // Call API to download video
+                await downloadComparison(frameNum);
+                
+                downloadVideoBtn.textContent = '⬇️ Download Video';
+                downloadVideoBtn.disabled = false;
+                
+            } catch (error) {
+                alert('Download failed: ' + error.message);
+                downloadVideoBtn.textContent = '⬇️ Download Video';
+                downloadVideoBtn.disabled = false;
             }
         });
 
@@ -816,6 +893,45 @@
             progressBar.style.width = percent + '%';
             progressBar.textContent = Math.round(percent) + '%';
             statusMessage.textContent = message;
+        }
+
+        async function downloadComparison(frameNum) {
+            const payload = {
+                job_id: state.jobId
+            };
+            
+            // Add optional frame number parameter
+            if (frameNum !== null) {
+                payload.frame_number = frameNum;
+            }
+            
+            const response = await fetch(`${API_BASE}/api/download-video`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to download video');
+            }
+            
+            // Get the file from response
+            const blob = await response.blob();
+            
+            // Create download link
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            
+            // Generate filename
+            const frameStr = frameNum !== null ? `_frame_${frameNum}` : '';
+            a.download = `stabilization_comparison_${state.jobId}${frameStr}.mp4`;
+            
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
         }
     </script>
 </body>

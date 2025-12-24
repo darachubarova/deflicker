@@ -179,3 +179,167 @@ def overlay_mask_on_frame(frame: np.ndarray, mask: np.ndarray, alpha: float = 0.
     overlay = cv2.addWeighted(frame, 1 - alpha, colored_mask, alpha, 0)
     
     return overlay
+
+
+def create_triple_comparison_video(
+    video_path: str,
+    masks_before: List[np.ndarray],
+    masks_after: List[np.ndarray],
+    output_path: str
+) -> str:
+    """
+    Create a video with three levels: original (top), mask before (middle), mask after (bottom).
+    
+    Args:
+        video_path: Path to original video
+        masks_before: List of masks before stabilization
+        masks_after: List of masks after stabilization
+        output_path: Path to save the output video
+        
+    Returns:
+        Path to the created video
+    """
+    # Extract frames from original video
+    frames = extract_frames(video_path)
+    
+    # Get video info
+    video_info = get_video_info(video_path)
+    fps = video_info['fps']
+    
+    # Determine dimensions
+    frame_h, frame_w = frames[0].shape[:2]
+    
+    # Create video writer for vertical stacking
+    # Output will be: frame_w x (frame_h * 3)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(output_path, fourcc, fps, (frame_w, frame_h * 3))
+    
+    if not out.isOpened():
+        raise ValueError(f"Cannot create video writer at {output_path}")
+    
+    # Process each frame
+    num_frames = min(len(frames), len(masks_before), len(masks_after))
+    
+    for i in range(num_frames):
+        # Get original frame
+        original = frames[i]
+        
+        # Convert masks to colored versions
+        if masks_before[i].dtype in [np.float32, np.float64]:
+            mask_before_uint8 = (masks_before[i] * 255).astype(np.uint8)
+        else:
+            mask_before_uint8 = masks_before[i].astype(np.uint8)
+            
+        if masks_after[i].dtype in [np.float32, np.float64]:
+            mask_after_uint8 = (masks_after[i] * 255).astype(np.uint8)
+        else:
+            mask_after_uint8 = masks_after[i].astype(np.uint8)
+        
+        # Apply colormaps
+        colored_before = cv2.applyColorMap(mask_before_uint8, cv2.COLORMAP_JET)
+        colored_after = cv2.applyColorMap(mask_after_uint8, cv2.COLORMAP_JET)
+        
+        # Resize masks to match frame size
+        colored_before = cv2.resize(colored_before, (frame_w, frame_h))
+        colored_after = cv2.resize(colored_after, (frame_w, frame_h))
+        
+        # Add text labels
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.7
+        color = (255, 255, 255)
+        thickness = 2
+        
+        cv2.putText(original, f'Original (Frame {i+1})', (10, 30), font, font_scale, color, thickness)
+        cv2.putText(colored_before, f'Mask Before Stabilization (Frame {i+1})', (10, 30), font, font_scale, color, thickness)
+        cv2.putText(colored_after, f'Mask After Stabilization (Frame {i+1})', (10, 30), font, font_scale, color, thickness)
+        
+        # Stack vertically
+        combined = np.vstack([original, colored_before, colored_after])
+        
+        # Write frame
+        out.write(combined)
+    
+    out.release()
+    
+    return output_path
+
+
+def create_triple_comparison_video_sliced(
+    frames: List[np.ndarray],
+    masks_before: List[np.ndarray],
+    masks_after: List[np.ndarray],
+    output_path: str,
+    fps: float = 30.0
+) -> str:
+    """
+    Create a video with three levels from already extracted frames and masks.
+    
+    Args:
+        frames: List of original video frames
+        masks_before: List of masks before stabilization
+        masks_after: List of masks after stabilization
+        output_path: Path to save the output video
+        fps: Frames per second for output video
+        
+    Returns:
+        Path to the created video
+    """
+    if not frames or not masks_before or not masks_after:
+        raise ValueError("Input frames and masks cannot be empty")
+    
+    # Determine dimensions
+    frame_h, frame_w = frames[0].shape[:2]
+    
+    # Create video writer for vertical stacking
+    # Output will be: frame_w x (frame_h * 3)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(output_path, fourcc, fps, (frame_w, frame_h * 3))
+    
+    if not out.isOpened():
+        raise ValueError(f"Cannot create video writer at {output_path}")
+    
+    # Process each frame
+    num_frames = min(len(frames), len(masks_before), len(masks_after))
+    
+    for i in range(num_frames):
+        # Get original frame
+        original = frames[i].copy()
+        
+        # Convert masks to colored versions
+        if masks_before[i].dtype in [np.float32, np.float64]:
+            mask_before_uint8 = (masks_before[i] * 255).astype(np.uint8)
+        else:
+            mask_before_uint8 = masks_before[i].astype(np.uint8)
+            
+        if masks_after[i].dtype in [np.float32, np.float64]:
+            mask_after_uint8 = (masks_after[i] * 255).astype(np.uint8)
+        else:
+            mask_after_uint8 = masks_after[i].astype(np.uint8)
+        
+        # Apply colormaps
+        colored_before = cv2.applyColorMap(mask_before_uint8, cv2.COLORMAP_JET)
+        colored_after = cv2.applyColorMap(mask_after_uint8, cv2.COLORMAP_JET)
+        
+        # Resize masks to match frame size
+        colored_before = cv2.resize(colored_before, (frame_w, frame_h))
+        colored_after = cv2.resize(colored_after, (frame_w, frame_h))
+        
+        # Add text labels
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.7
+        color = (255, 255, 255)
+        thickness = 2
+        
+        cv2.putText(original, f'Original (Frame {i+1})', (10, 30), font, font_scale, color, thickness)
+        cv2.putText(colored_before, f'Mask Before Stabilization (Frame {i+1})', (10, 30), font, font_scale, color, thickness)
+        cv2.putText(colored_after, f'Mask After Stabilization (Frame {i+1})', (10, 30), font, font_scale, color, thickness)
+        
+        # Stack vertically
+        combined = np.vstack([original, colored_before, colored_after])
+        
+        # Write frame
+        out.write(combined)
+    
+    out.release()
+    
+    return output_path

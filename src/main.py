@@ -24,7 +24,9 @@ from .utils import (
     save_mask_image,
     create_comparison_image,
     encode_image_base64,
-    overlay_mask_on_frame
+    overlay_mask_on_frame,
+    create_triple_comparison_video,
+    create_triple_comparison_video_sliced
 )
 
 
@@ -77,6 +79,11 @@ class StabilizeRequest(BaseModel):
     method: str  # 'moving_average', 'median_filter', 'exponential_smoothing'
     window_size: Optional[int] = 5
     alpha: Optional[float] = 0.3
+
+
+class DownloadVideoRequest(BaseModel):
+    job_id: str
+    frame_number: Optional[int] = None  # Frame number to start from
 
 
 class JobStatus(BaseModel):
@@ -487,6 +494,90 @@ async def delete_job(job_id: str):
         file.unlink()
     
     return {'message': 'Job deleted successfully'}
+
+
+@app.post("/api/download-video")
+async def download_video(request: DownloadVideoRequest):
+    """
+    Download a video with three levels: original, masks before, masks after.
+    
+    Parameters:
+        - job_id: ID of the job
+        - frame_number: Frame number to start from (optional, default: 0)
+    
+    Returns:
+        Video file as download
+    """
+    job_id = request.job_id
+    frame_num = request.frame_number or 0
+    
+    if job_id not in jobs:
+        if not load_job_state(job_id):
+            raise HTTPException(status_code=404, detail="Job not found")
+    
+    job = jobs[job_id]
+    
+    if job['status'] != 'completed':
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot download video in status: {job['status']}. Please complete stabilization first."
+        )
+    
+    # Check if we have the necessary data
+    if 'masks_before' not in job or 'masks_after' not in job:
+        raise HTTPException(
+            status_code=400,
+            detail="Video data not available. Please reprocess the video."
+        )
+    
+    # Validate frame number
+    masks_before = job['masks_before']
+    total_frames = len(masks_before)
+    
+    if frame_num < 0 or frame_num >= total_frames:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid frame_number. Must be between 0 and {total_frames-1}"
+        )
+    
+    # Get all frames from the specified frame number
+    masks_before_slice = masks_before[frame_num:]
+    masks_after_slice = job['masks_after'][frame_num:]
+    
+    # Also get the frames
+    frames = job['frames']
+    frames_slice = frames[frame_num:]
+    
+    # Get video info for fps
+    video_info = job['video_info']
+    fps = video_info.get('fps', 30.0)
+    
+    # Create output video path
+    job_dir = RESULTS_DIR / job_id
+    output_video_path = job_dir / f"comparison_video_from_{frame_num}.mp4"
+    
+    # Check if video already exists
+    if not output_video_path.exists():
+        try:
+            create_triple_comparison_video_sliced(
+                frames_slice,
+                masks_before_slice,
+                masks_after_slice,
+                str(output_video_path),
+                fps
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to create video: {str(e)}"
+            )
+    
+    # Return the video file
+    return FileResponse(
+        path=output_video_path,
+        media_type="video/mp4",
+        filename=f"stabilization_comparison_{job_id}_frame_{frame_num}.mp4"
+    )
 
 # Serve frontend
 from fastapi.staticfiles import StaticFiles
